@@ -1,0 +1,46 @@
+# Beispiel-Konfiguration für die Verwendung des Meatmeet Package
+# Dieses Beispiel zeigt, wie Sie das Package in Ihr ESPHome-Projekt einbinden
+
+esphome:
+  name: meatmeet-example
+  friendly_name: Meatmeet Example
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# WiFi Konfiguration
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  
+  # Fallback hotspot
+  ap:
+    ssid: "Meatmeet Fallback"
+    password: !secret ap_password
+
+captive_portal:
+
+# Logging
+logger:
+
+# Home Assistant API
+api:
+  encryption:
+    key: !secret api_key
+
+# OTA Updates
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+substitutions:
+  meatmeet_mac: "XX:XX:XX:XX:XX:XX"  # Your device MAC address
+  update_interval: "3s"
+
+# Meatmeet Package
+packages:
+  - url: https://github.com/makerwolf/Meatmeet-S-Pro-ESPhome
+    file: meatmeet-s-pro-package.yaml
+    refresh: 1s
