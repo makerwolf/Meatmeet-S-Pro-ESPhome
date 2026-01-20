@@ -46,7 +46,6 @@ sensor:
         // Batteriestand (Byte 8)
         int battery = x[8];
         if (battery >= 0 && battery <= 100) {
-          id(battery_pct) = battery;
           id(meatmeet_battery).publish_state(battery);
         }
         
