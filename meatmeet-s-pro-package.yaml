@@ -1,0 +1,163 @@
+# Meatmeet S Pro ESPHome Package
+
+substitutions:
+  meatmeet_mac: "00:00:00:00:00:00" # Replace with your Meatmeet S Pro MAC address
+  update_interval: "3s"
+
+esp32_ble_tracker:
+  scan_parameters:
+    active: true
+
+# BLE Client for Meatmeet S Pro
+ble_client:
+  - mac_address: ${meatmeet_mac}
+    id: meatmeet_device
+    auto_connect: true
+    on_connect:
+      then:
+        - logger.log: "Connected to Meatmeet S Pro"
+        - delay: 1s
+        # Send initialization command
+        - ble_client.ble_write:
+            id: meatmeet_device
+            service_uuid: A6ED0401-D344-460A-8075-B9E8EC90D71B
+            characteristic_uuid: A6ED0404-D344-460A-8075-B9E8EC90D71B
+            value: [0x01, 0x06, 0x02]
+    on_disconnect:
+      then:
+        - logger.log: "Meatmeet S Pro disconnected"
+
+sensor:
+  # internal BLE Client Sensor for receiving data
+  - platform: ble_client
+    type: characteristic
+    ble_client_id: meatmeet_device
+    name: "Meatmeet Data"
+    internal: true  # do not show in ha
+    service_uuid: 0000F5A0-0000-1000-8000-00805F9B34FB
+    characteristic_uuid: 0000F5A1-0000-1000-8000-00805F9B34FB
+    notify: true
+    update_interval: never  
+    lambda: |-
+      // Rohdaten parsen
+      if (x.size() >= 54 && x[0] == 0x4D && x[1] == 0x45) {
+        ESP_LOGD("meatmeet", "Empfange 54-Byte Paket");
+        
+        // Batteriestand (Byte 8)
+        int battery = x[8];
+        if (battery >= 0 && battery <= 100) {
+          id(battery_pct) = battery;
+          id(meatmeet_battery).publish_state(battery);
+        }
+        
+        // Zone 1 (Bytes 11-12, uint16 LE in 0.01°C)
+        uint16_t temp1_raw = x[11] | (x[12] << 8);
+        if (temp1_raw < 0xA000) {
+          float temp1 = temp1_raw / 100.0;
+          id(meatmeet_temp1).publish_state(temp1);
+        }
+        
+        // Zone 2 (Bytes 16-17, uint16 LE in 0.01°C)
+        uint16_t temp2_raw = x[16] | (x[17] << 8);
+        if (temp2_raw < 0xA000) {
+          float temp2 = temp2_raw / 100.0;
+          id(meatmeet_temp2).publish_state(temp2);
+        }
+        
+        // Zone 3 (Bytes 18-19, uint16 LE in 0.01°C)
+        uint16_t temp3_raw = x[18] | (x[19] << 8);
+        if (temp3_raw < 0xA000) {
+          float temp3 = temp3_raw / 100.0;
+          id(meatmeet_temp3).publish_state(temp3);
+        }
+        
+        // Zone 4 (Bytes 20-21, uint16 LE in 0.01°C)
+        uint16_t temp4_raw = x[20] | (x[21] << 8);
+        if (temp4_raw < 0xA000) {
+          float temp4 = temp4_raw / 100.0;
+          id(meatmeet_temp4).publish_state(temp4);
+        }
+        
+        // Zone 5 (Bytes 22-23, uint16 LE in 0.01°C)
+        uint16_t temp5_raw = x[22] | (x[23] << 8);
+        if (temp5_raw < 0xA000) {
+          float temp5 = temp5_raw / 100.0;
+          id(meatmeet_temp5).publish_state(temp5);
+        }
+
+        // ambient temperature / Zone 6 (Byte 13, uint8 Integer in °C)
+        uint8_t temp_ambient_raw = x[13];
+        if (temp_ambient_raw > 0 && temp_ambient_raw < 250) {
+          float temp_ambient = (float)temp_ambient_raw;
+          id(meatmeet_ambient).publish_state(temp_ambient);
+        }
+      }
+      return 0;  // Wert für den internen Sensor (unwichtig)
+  
+  # Temperature sensors (Template, updated via Lambda)
+  - platform: template
+    id: meatmeet_temp1
+    name: "Meatmeet Zone 1"
+    device_class: temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    icon: "mdi:thermometer"
+    
+  - platform: template
+    id: meatmeet_temp2
+    name: "Meatmeet Zone 2"
+    device_class: temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    icon: "mdi:thermometer"
+    
+  - platform: template
+    id: meatmeet_temp3
+    name: "Meatmeet Zone 3"
+    device_class: temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    icon: "mdi:thermometer"
+    
+  - platform: template
+    id: meatmeet_temp4
+    name: "Meatmeet Zone 4"
+    device_class: temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    icon: "mdi:thermometer"
+    
+  - platform: template
+    id: meatmeet_temp5
+    name: "${meatmeat_name} Zone 5"
+    device_class: temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    icon: "mdi:thermometer"
+    
+  - platform: template
+    id: meatmeet_ambient
+    name: "Meatmeet Umgebungstemperatur"
+    device_class: temperature
+    unit_of_measurement: "°C"
+    accuracy_decimals: 0
+    icon: "mdi:home-thermometer"
+  
+  # Batterysensor
+  - platform: template
+    id: meatmeet_battery
+    name: "Meatmeet Battery"
+    device_class: battery
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    icon: "mdi:battery"
+
+# Periodic status request every 3 seconds
+interval:
+  - interval: ${update_interval}
+    then:
+      - ble_client.ble_write:
+          id: meatmeet_device
+          service_uuid: A6ED0401-D344-460A-8075-B9E8EC90D71B
+          characteristic_uuid: A6ED0404-D344-460A-8075-B9E8EC90D71B
+          value: [0x01, 0x06, 0x02]
