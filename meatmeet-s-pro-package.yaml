@@ -96,7 +96,7 @@ sensor:
   # Temperature sensors (Template, updated via Lambda)
   - platform: template
     id: meatmeet_temp1
-    name: "Meatmeet Zone 1"
+    name: "Zone 1"
     device_class: temperature
     unit_of_measurement: "°C"
     accuracy_decimals: 1
@@ -104,7 +104,7 @@ sensor:
     
   - platform: template
     id: meatmeet_temp2
-    name: "Meatmeet Zone 2"
+    name: "Zone 2"
     device_class: temperature
     unit_of_measurement: "°C"
     accuracy_decimals: 1
@@ -112,7 +112,7 @@ sensor:
     
   - platform: template
     id: meatmeet_temp3
-    name: "Meatmeet Zone 3"
+    name: "Zone 3"
     device_class: temperature
     unit_of_measurement: "°C"
     accuracy_decimals: 1
@@ -120,7 +120,7 @@ sensor:
     
   - platform: template
     id: meatmeet_temp4
-    name: "Meatmeet Zone 4"
+    name: "Zone 4"
     device_class: temperature
     unit_of_measurement: "°C"
     accuracy_decimals: 1
@@ -128,7 +128,7 @@ sensor:
     
   - platform: template
     id: meatmeet_temp5
-    name: "${meatmeat_name} Zone 5"
+    name: "Zone 5"
     device_class: temperature
     unit_of_measurement: "°C"
     accuracy_decimals: 1
@@ -136,7 +136,7 @@ sensor:
     
   - platform: template
     id: meatmeet_ambient
-    name: "Meatmeet Umgebungstemperatur"
+    name: "Ambient"
     device_class: temperature
     unit_of_measurement: "°C"
     accuracy_decimals: 0
@@ -145,7 +145,7 @@ sensor:
   # Batterysensor
   - platform: template
     id: meatmeet_battery
-    name: "Meatmeet Battery"
+    name: "Battery"
     device_class: battery
     unit_of_measurement: "%"
     accuracy_decimals: 0
