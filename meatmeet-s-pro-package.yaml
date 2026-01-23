@@ -43,10 +43,16 @@ sensor:
       if (x.size() >= 54 && x[0] == 0x4D && x[1] == 0x45) {
         ESP_LOGD("meatmeet", "Empfange 54-Byte Paket");
         
-        // Batteriestand (Byte 8)
+        // Battery level Station (Byte 8)
         int battery = x[8];
         if (battery >= 0 && battery <= 100) {
           id(meatmeet_battery).publish_state(battery);
+        }
+        
+        // Battery level Probe (Byte 15)
+        int probe_battery = x[15];
+        if (probe_battery >= 0 && probe_battery <= 100) {
+          id(meatmeet_probe_battery).publish_state(probe_battery);
         }
         
         // Zone 1 (Bytes 11-12, uint16 LE in 0.01°C)
@@ -142,10 +148,18 @@ sensor:
     accuracy_decimals: 0
     icon: "mdi:home-thermometer"
   
-  # Batterysensor
+  # Battery sensors
   - platform: template
     id: meatmeet_battery
-    name: "Battery"
+    name: "Battery Station"
+    device_class: battery
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    icon: "mdi:battery"
+    
+  - platform: template
+    id: meatmeet_probe_battery
+    name: "Battery Probe"
     device_class: battery
     unit_of_measurement: "%"
     accuracy_decimals: 0
