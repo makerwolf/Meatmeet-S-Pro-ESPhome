@@ -39,9 +39,9 @@ sensor:
     notify: true
     update_interval: never  
     lambda: |-
-      // Rohdaten parsen
+      // Parse raw data
       if (x.size() >= 54 && x[0] == 0x4D && x[1] == 0x45) {
-        ESP_LOGD("meatmeet", "Empfange 54-Byte Paket");
+        ESP_LOGD("meatmeet", "Receiving 54-byte packet");
         
         // Battery level Station (Byte 8)
         int battery = x[8];
@@ -97,7 +97,7 @@ sensor:
           id(meatmeet_ambient).publish_state(temp_ambient);
         }
       }
-      return 0;  // Wert für den internen Sensor (unwichtig)
+      return 0;  // Value for internal sensor (not important)
   
   # Temperature sensors (Template, updated via Lambda)
   - platform: template
