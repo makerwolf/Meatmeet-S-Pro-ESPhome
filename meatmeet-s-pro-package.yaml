@@ -8,6 +8,14 @@ esp32_ble_tracker:
   scan_parameters:
     active: true
 
+# Probe ID, learned automatically from the status packets (bytes 5-10).
+# Needed as the target for alarm commands.
+globals:
+  - id: meatmeet_probe_id
+    type: std::vector<uint8_t>
+    restore_value: false
+    initial_value: 'std::vector<uint8_t>()'
+
 # BLE Client for Meatmeet S Pro
 ble_client:
   - mac_address: ${meatmeet_mac}
@@ -26,6 +34,8 @@ ble_client:
     on_disconnect:
       then:
         - logger.log: "Meatmeet S Pro disconnected"
+        # Forget the probe ID so it is re-learned (and logged) after reconnect
+        - lambda: 'id(meatmeet_probe_id).clear();'
 
 sensor:
   # internal BLE Client Sensor for receiving data
@@ -37,52 +47,77 @@ sensor:
     service_uuid: 0000F5A0-0000-1000-8000-00805F9B34FB
     characteristic_uuid: 0000F5A1-0000-1000-8000-00805F9B34FB
     notify: true
-    update_interval: never  
+    update_interval: never
     lambda: |-
       // Parse raw data
       if (x.size() >= 54 && x[0] == 0x4D && x[1] == 0x45) {
         ESP_LOGD("meatmeet", "Receiving 54-byte packet");
-        
+
+        // Probe ID (Bytes 5-10), used as target for alarm commands.
+        // Byte 4 appears to be the number of connected probes.
+        if (x[4] >= 1) {
+          std::vector<uint8_t> pid(x.begin() + 5, x.begin() + 11);
+          if (pid != id(meatmeet_probe_id)) {
+            id(meatmeet_probe_id) = pid;
+            ESP_LOGI("meatmeet", "Probe ID: %02X %02X %02X %02X %02X %02X",
+                     pid[0], pid[1], pid[2], pid[3], pid[4], pid[5]);
+          }
+        }
+
+        // Cook / alarm state (Byte 28): 0 = idle, 1 = running, 2 = stopped
+        {
+          std::string s;
+          switch (x[28]) {
+            case 0: s = "Idle"; break;
+            case 1: s = "Running"; break;
+            case 2: s = "Stopped"; break;
+            default: s = "Unknown (" + to_string(x[28]) + ")"; break;
+          }
+          if (id(meatmeet_cook_state).state != s) {
+            id(meatmeet_cook_state).publish_state(s);
+          }
+        }
+
         // Battery level Station (Byte 8)
         int battery = x[8];
         if (battery >= 0 && battery <= 100) {
           id(meatmeet_battery).publish_state(battery);
         }
-        
+
         // Battery level Probe (Byte 15)
         int probe_battery = x[15];
         if (probe_battery >= 0 && probe_battery <= 100) {
           id(meatmeet_probe_battery).publish_state(probe_battery);
         }
-        
+
         // Zone 1 (Bytes 11-12, uint16 LE in 0.01°C)
         uint16_t temp1_raw = x[11] | (x[12] << 8);
         if (temp1_raw < 0xA000) {
           float temp1 = temp1_raw / 100.0;
           id(meatmeet_temp1).publish_state(temp1);
         }
-        
+
         // Zone 2 (Bytes 16-17, uint16 LE in 0.01°C)
         uint16_t temp2_raw = x[16] | (x[17] << 8);
         if (temp2_raw < 0xA000) {
           float temp2 = temp2_raw / 100.0;
           id(meatmeet_temp2).publish_state(temp2);
         }
-        
+
         // Zone 3 (Bytes 18-19, uint16 LE in 0.01°C)
         uint16_t temp3_raw = x[18] | (x[19] << 8);
         if (temp3_raw < 0xA000) {
           float temp3 = temp3_raw / 100.0;
           id(meatmeet_temp3).publish_state(temp3);
         }
-        
+
         // Zone 4 (Bytes 20-21, uint16 LE in 0.01°C)
         uint16_t temp4_raw = x[20] | (x[21] << 8);
         if (temp4_raw < 0xA000) {
           float temp4 = temp4_raw / 100.0;
           id(meatmeet_temp4).publish_state(temp4);
         }
-        
+
         // Zone 5 (Bytes 22-23, uint16 LE in 0.01°C)
         uint16_t temp5_raw = x[22] | (x[23] << 8);
         if (temp5_raw < 0xA000) {
@@ -98,7 +133,7 @@ sensor:
         }
       }
       return 0;  // Value for internal sensor (not important)
-  
+
   # Temperature sensors (Template, updated via Lambda)
   - platform: template
     id: meatmeet_temp1
@@ -107,7 +142,7 @@ sensor:
     unit_of_measurement: "°C"
     accuracy_decimals: 1
     icon: "mdi:thermometer"
-    
+
   - platform: template
     id: meatmeet_temp2
     name: "Zone 2"
@@ -115,7 +150,7 @@ sensor:
     unit_of_measurement: "°C"
     accuracy_decimals: 1
     icon: "mdi:thermometer"
-    
+
   - platform: template
     id: meatmeet_temp3
     name: "Zone 3"
@@ -123,7 +158,7 @@ sensor:
     unit_of_measurement: "°C"
     accuracy_decimals: 1
     icon: "mdi:thermometer"
-    
+
   - platform: template
     id: meatmeet_temp4
     name: "Zone 4"
@@ -131,7 +166,7 @@ sensor:
     unit_of_measurement: "°C"
     accuracy_decimals: 1
     icon: "mdi:thermometer"
-    
+
   - platform: template
     id: meatmeet_temp5
     name: "Zone 5"
@@ -139,7 +174,7 @@ sensor:
     unit_of_measurement: "°C"
     accuracy_decimals: 1
     icon: "mdi:thermometer"
-    
+
   - platform: template
     id: meatmeet_ambient
     name: "Ambient"
@@ -147,7 +182,7 @@ sensor:
     unit_of_measurement: "°C"
     accuracy_decimals: 0
     icon: "mdi:home-thermometer"
-  
+
   # Battery sensors
   - platform: template
     id: meatmeet_battery
@@ -156,7 +191,7 @@ sensor:
     unit_of_measurement: "%"
     accuracy_decimals: 0
     icon: "mdi:battery"
-    
+
   - platform: template
     id: meatmeet_probe_battery
     name: "Battery Probe"
@@ -164,6 +199,99 @@ sensor:
     unit_of_measurement: "%"
     accuracy_decimals: 0
     icon: "mdi:battery"
+
+text_sensor:
+  - platform: template
+    id: meatmeet_cook_state
+    name: "Cook State"
+    icon: "mdi:grill"
+
+# Alarm target temperature (sent to the base station by "Start Alarm")
+number:
+  - platform: template
+    id: meatmeet_target
+    name: "Alarm Target"
+    device_class: temperature
+    unit_of_measurement: "°C"
+    min_value: 0
+    max_value: 300
+    step: 0.5
+    initial_value: 60
+    optimistic: true
+    restore_value: true
+    mode: box
+    icon: "mdi:thermometer-alert"
+
+button:
+  # Set target temperature and start a cook. The base station beeps by itself
+  # once the probe reaches the target.
+  - platform: template
+    name: "Start Alarm"
+    icon: "mdi:bell-ring"
+    on_press:
+      - if:
+          condition:
+            lambda: 'return id(meatmeet_probe_id).size() == 6;'
+          then:
+            # Set target: 4D 45 29 08 <probe id x6> <temp uint16 LE, 0.01 °C>
+            - ble_client.ble_write:
+                id: meatmeet_device
+                service_uuid: 0000F5A0-0000-1000-8000-00805F9B34FB
+                characteristic_uuid: 0000F5A1-0000-1000-8000-00805F9B34FB
+                value: !lambda |-
+                  uint16_t t = (uint16_t) lroundf(id(meatmeet_target).state * 100.0f);
+                  std::vector<uint8_t> v{0x4D, 0x45, 0x29, 0x08};
+                  v.insert(v.end(), id(meatmeet_probe_id).begin(), id(meatmeet_probe_id).end());
+                  v.push_back(t & 0xFF);
+                  v.push_back(t >> 8);
+                  return v;
+            - delay: 500ms
+            # Start cook: 4D 45 30 0C <probe id x6> 01 <unix time as 10 BCD digits>
+            - ble_client.ble_write:
+                id: meatmeet_device
+                service_uuid: 0000F5A0-0000-1000-8000-00805F9B34FB
+                characteristic_uuid: 0000F5A1-0000-1000-8000-00805F9B34FB
+                value: !lambda |-
+                  time_t now = ::time(nullptr);
+                  // Fallback if no time source has set the clock yet.
+                  // The base station accepted this fixed value in testing.
+                  if (now < 1700000000) now = 1792755919;
+                  char s[11];
+                  snprintf(s, sizeof(s), "%010lu", (unsigned long) now);
+                  std::vector<uint8_t> v{0x4D, 0x45, 0x30, 0x0C};
+                  v.insert(v.end(), id(meatmeet_probe_id).begin(), id(meatmeet_probe_id).end());
+                  v.push_back(0x01);
+                  for (int i = 0; i < 10; i += 2) {
+                    v.push_back(((s[i] - '0') << 4) | (s[i + 1] - '0'));
+                  }
+                  return v;
+          else:
+            - logger.log:
+                level: WARN
+                format: "Probe ID not known yet - wait for status data before starting alarm"
+
+  # Stop the cook / silence the alarm: 4D 45 30 07 <probe id x6> 02
+  - platform: template
+    name: "Stop Alarm"
+    icon: "mdi:bell-off"
+    on_press:
+      - if:
+          condition:
+            lambda: 'return id(meatmeet_probe_id).size() == 6;'
+          then:
+            - ble_client.ble_write:
+                id: meatmeet_device
+                service_uuid: 0000F5A0-0000-1000-8000-00805F9B34FB
+                characteristic_uuid: 0000F5A1-0000-1000-8000-00805F9B34FB
+                value: !lambda |-
+                  std::vector<uint8_t> v{0x4D, 0x45, 0x30, 0x07};
+                  v.insert(v.end(), id(meatmeet_probe_id).begin(), id(meatmeet_probe_id).end());
+                  v.push_back(0x02);
+                  return v;
+          else:
+            - logger.log:
+                level: WARN
+                format: "Probe ID not known yet - cannot stop alarm"
 
 # Periodic status request every 3 seconds
 interval:

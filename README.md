@@ -9,6 +9,7 @@ ESPHome package for the Meatmeet S Pro 6-channel Bluetooth thermometer.
 - 🔋 Battery level sensor
 - 📡 Automatic BLE connection
 - 🔄 Continuous data updates with configurable interval
+- ⏰ Target temperature alarm on the base station (start/stop from Home Assistant)
 
 ## Installation
 
@@ -56,6 +57,17 @@ After integration, the following sensors will be available in Home Assistant:
 - **Zone 1-5**: Temperature in °C (0.1°C accuracy)
 - **Ambient**: Grip-Temperature in °C (integer)
 - **Battery**: Battery level in %
+- **Cook State**: `Idle`, `Running` or `Stopped`
+
+The following controls are also available:
+
+- **Alarm Target**: Target temperature in °C (0-300, 0.5° steps)
+- **Start Alarm**: Sends the target temperature to the base station and starts a cook. The base station beeps by itself when the probe reaches the target.
+- **Stop Alarm**: Stops the cook and silences the alarm
+
+The alarm commands are addressed to the probe ID, which is read automatically from the status packets and logged (`Probe ID: ...`). Wait until data is being received before pressing **Start Alarm**.
+
+To use the current time as the cook start time, add a [time source](https://esphome.io/components/time/) such as `time: - platform: homeassistant` to your configuration. Without one, a fixed timestamp is sent, which the base station also accepts.
 
 ## Example Configuration
 
@@ -68,6 +80,7 @@ See `meatmeet-example.yaml` for a complete example configuration.
 - **Service UUID**: `A6ED0401-D344-460A-8075-B9E8EC90D71B`
 - **Notification UUID**: `0000F5A1-0000-1000-8000-00805F9B34FB`
 - **Write UUID**: `A6ED0404-D344-460A-8075-B9E8EC90D71B`
+- **Alarm Command UUID**: `0000F5A1-0000-1000-8000-00805F9B34FB` (service `0000F5A0-...`)
 - **Data Packet**: 54 Bytes
 - **Header**: `0x4D 0x45` ("ME")
 
@@ -76,6 +89,8 @@ See `meatmeet-example.yaml` for a complete example configuration.
 | Byte(s) | Content | Format |
 |---------|--------|--------|
 | 0-1 | Header "ME" | `0x4D 0x45` |
+| 4 | Number of connected probes (probably) | uint8 |
+| 5-10 | Probe ID | 6 bytes |
 | 8 | Battery Level | uint8 (%) |
 | 11-12 | Zone 1 Temperature | uint16 LE (0.01°C) |
 | 13 | Ambient Temperature | uint8 (°C) |
@@ -83,6 +98,17 @@ See `meatmeet-example.yaml` for a complete example configuration.
 | 18-19 | Zone 3 Temperature | uint16 LE (0.01°C) |
 | 20-21 | Zone 4 Temperature | uint16 LE (0.01°C) |
 | 22-23 | Zone 5 Temperature | uint16 LE (0.01°C) |
+| 28 | Cook State | uint8 (0 = idle, 1 = running, 2 = stopped) |
+
+### Alarm Commands
+
+Written to `0000F5A1-0000-1000-8000-00805F9B34FB`:
+
+| Command | Bytes |
+|---------|-------|
+| Set target | `4D 45 29 08` + probe ID (6 bytes) + target (uint16 LE, 0.01°C) |
+| Start cook | `4D 45 30 0C` + probe ID (6 bytes) + `01` + Unix time as 10 BCD digits (5 bytes) |
+| Stop cook | `4D 45 30 07` + probe ID (6 bytes) + `02` |
 
 ## Requirements
 
